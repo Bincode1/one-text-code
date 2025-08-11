@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: one-text-code
+server:
+  port: 8601
+  servlet:
+    context-path: /api
+springdoc:
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.bin.onetextcode.controller
