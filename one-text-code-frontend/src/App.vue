@@ -1,11 +1,32 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import BasicLayout from '@/layouts/BasicLayout.vue'
+import { healthy } from '@/api/healthyController.ts'
+
+healthy().then((res) => {
+  console.log(res)
+})
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <BasicLayout />
 </template>
 
-<style scoped></style>
+<style>
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#app {
+  height: 100%;
+}
+</style>
