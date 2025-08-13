@@ -2,14 +2,14 @@
   <a-layout-footer class="global-footer">
     <div class="footer-content">
       <p class="copyright">
-        编程导航原创项目 by
+        我的网站
         <a
-          href="https://www.codefather.cn"
+          href="https://binartale.fun"
           target="_blank"
           rel="noopener noreferrer"
           class="author-link"
         >
-          程序员鱼皮
+          彬彬
         </a>
       </p>
     </div>

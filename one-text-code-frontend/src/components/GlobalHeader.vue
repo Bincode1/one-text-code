@@ -8,8 +8,6 @@
           <h1 class="site-title">One-Text-Code</h1>
         </div>
       </div>
-
-      <!-- 中间：导航菜单 -->
       <div class="header-center">
         <a-menu
           v-model:selectedKeys="selectedKeys"
@@ -19,28 +17,55 @@
           @click="handleMenuClick"
         />
       </div>
+      <!-- 新增的中间区域 -->
 
       <!-- 右侧：用户信息 -->
       <div class="header-right">
-        <a-button type="primary" @click="handleLogin">
-          <template #icon>
-            <UserOutlined />
-          </template>
-          登录
-        </a-button>
+        <template v-if="isUserReady">
+          <!-- 未登录：显示"未登录"按钮（确认未登录后再显示，避免闪烁） -->
+          <a-button v-if="!isLoggedIn" type="primary" @click="handleLogin"> 未登录</a-button>
+
+          <!-- 已登录：只展示头像，悬浮时显示用户信息和退出登录 -->
+          <a-dropdown v-else trigger="hover">
+            <div class="user-info">
+              <a-avatar v-if="userAvatar" :src="userAvatar" size="small" />
+              <a-avatar v-else size="small">{{ userInitial }}</a-avatar>
+            </div>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="userInfo" class="user-info-item">
+                  <div class="user-detail">
+                    <div class="user-name">{{ userName }}</div>
+                    <div class="user-bio" v-if="userBio">{{ userBio }}</div>
+                    <div class="user-bio" v-else>暂无简介</div>
+                  </div>
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="logout" @click="handleLogout" class="logout-item">
+                  <logout-outlined />
+                  <span>注销</span>
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </template>
+        <!-- 未确定登录态时：占位，避免布局跳动 -->
+        <div v-else class="user-placeholder" />
       </div>
     </div>
   </a-layout-header>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { UserOutlined } from '@ant-design/icons-vue'
-import type { MenuProps } from 'ant-design-vue'
+import { type MenuProps, message } from 'ant-design-vue'
+import { LogoutOutlined } from '@ant-design/icons-vue'
+import { useLoginUserStore } from '@/stores/loginUser.ts'
+import { userLogout } from '@/api/userController.ts'
 
 const router = useRouter()
-
+const loginUserStore = useLoginUserStore()
 // 初始化时设置为空，避免闪烁
 const selectedKeys = ref<string[]>(['/'])
 
@@ -49,23 +74,26 @@ router.afterEach((to, from, next) => {
 })
 
 // 菜单配置
-const menuItems = ref([
-  {
-    key: '/',
-    label: '首页',
-    title: '首页',
-  },
-  {
-    key: '/community',
-    label: '技术社区',
-    title: '技术社区',
-  },
-  {
-    key: '/about',
-    label: '关于我们',
-    title: '关于我们',
-  },
-])
+const menuItems = computed(() => {
+  const items = [
+    {
+      key: '/',
+      label: '首页',
+      title: '首页',
+    },
+  ]
+
+  // 只有管理员才能看到用户管理菜单
+  if (isLoggedIn.value && (loginUserStore.loginUser as any)?.userRole === 'admin') {
+    items.push({
+      key: '/admin/userManage',
+      label: '用户管理',
+      title: '用户管理',
+    })
+  }
+
+  return items
+})
 
 // 菜单点击处理
 const handleMenuClick: MenuProps['onClick'] = (e) => {
@@ -80,9 +108,40 @@ const handleMenuClick: MenuProps['onClick'] = (e) => {
 
 // 登录处理
 const handleLogin = () => {
-  console.log('Login clicked')
-  // 这里可以添加登录逻辑
+  router.push('/user/login')
 }
+
+// 注销处理
+const handleLogout = () => {
+  // 清除登录信息
+  const res = userLogout()
+  loginUserStore.setLoginUser({
+    userName: '未登录',
+  })
+  message.success('注销成功')
+  // 跳转到首页
+  router.push('/')
+}
+
+// 登录态派生数据
+// 登录态就绪标识：首次加载后端完成前不渲染具体内容，避免闪烁
+const isUserReady = ref(false)
+const userName = computed(() => loginUserStore.loginUser.userName || '未登录')
+const isLoggedIn = computed(() => userName.value !== '未登录')
+const userAvatar = computed(
+  () => (loginUserStore.loginUser as any)?.userAvatar as string | undefined,
+)
+const userInitial = computed(() => userName.value?.slice(0, 1) || '用')
+const userBio = computed(() => (loginUserStore.loginUser as any)?.userProfile || '')
+
+// 组件挂载时尝试拉取一次用户信息（若后端已登录会返回真实信息）
+onMounted(async () => {
+  try {
+    await loginUserStore.fetchLoginUser?.()
+  } finally {
+    isUserReady.value = true
+  }
+})
 </script>
 
 <style scoped>
@@ -106,13 +165,21 @@ const handleLogin = () => {
   margin: 0 auto;
   padding: 0 24px;
   height: 100%;
-  gap: 40px;
+  gap: 16px;
+}
+
+/* 中间区域自适应 */
+.header-center {
+  flex: 1; /* 关键：占据剩余空间 */
+  min-width: 0; /* 防止内容溢出 */
+  display: flex;
+  justify-content: center; /* 菜单居中 */
 }
 
 .header-left {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  flex-shrink: 0;
 }
 
 .logo-container {
@@ -134,31 +201,89 @@ const handleLogin = () => {
   color: #1890ff;
 }
 
-.header-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  margin: 0 auto;
-}
+/* header-center 已移除，不再占位 */
 
 .header-menu {
   border: none;
   background: transparent;
   line-height: 64px;
-  margin: 0 20px;
+  margin-left: 8px;
 }
 
-.header-menu :deep(.ant-menu-item) {
-  height: 64px;
+/* 菜单项样式调整 */
+.header-menu {
+  border: none;
+  background: transparent;
   line-height: 64px;
-  padding: 0 20px;
+  width: 100%; /* 填满中间区域 */
+  display: flex;
+  justify-content: center; /* 菜单项居中 */
 }
 
+/* 右侧固定宽度 */
 .header-right {
-  display: flex;
-  align-items: center;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.user-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 0 8px;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.user-info:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 占位元素，避免未确定登录态时布局跳动（与已登录宽度接近） */
+.user-placeholder {
+  width: 40px;
+  height: 32px;
+}
+
+/* 用户信息项样式 */
+:deep(.user-info-item) {
+  padding: 8px 12px;
+  cursor: default;
+}
+
+:deep(.user-info-item:hover) {
+  background-color: transparent;
+}
+
+.user-detail {
+  min-width: 150px;
+}
+
+.user-name {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.user-bio {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  white-space: normal;
+  line-height: 1.5;
+}
+
+/* 注销按钮样式 */
+:deep(.logout-item) {
+  color: #f5222d;
+}
+
+:deep(.logout-item:hover) {
+  background-color: #fff1f0;
+}
+
+:deep(.logout-item .anticon) {
+  color: #f5222d;
 }
 
 /* 响应式设计 */
@@ -177,6 +302,10 @@ const handleLogin = () => {
 
   .header-center {
     display: none;
+  }
+
+  .header-left {
+    flex: 1; /* 左侧占据全部空间 */
   }
 }
 
