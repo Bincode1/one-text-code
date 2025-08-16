@@ -163,17 +163,4 @@ public class UserController {
         return ResultUtils.success(userVOPage);
     }
 
-
-    /**
-     * 保存用户。
-     *
-     * @return {@code true} 保存成功，{@code false} 保存失败
-     */
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    @PostMapping("save")
-    public BaseResponse<String> save() {
-        return ResultUtils.success("oksss");
-    }
-
-
 }

@@ -1,3 +1,6 @@
+### custom ###
+application-local.yml
+tmp / *
 # Logs
 logs
 *.log
