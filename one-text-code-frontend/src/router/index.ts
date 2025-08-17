@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('@/pages/admin/UserManagePage.vue'),
       meta: { requiresAdmin: true },
     },
+    {
+      path: '/chat/:id',
+      name: '应用对话',
+      component: () => import('@/pages/ChatPage.vue'),
+    },
   ],
 })
 
