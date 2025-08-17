@@ -9,7 +9,7 @@ import com.bin.onetextcode.constant.UserConstant;
 import com.bin.onetextcode.exception.BusinessException;
 import com.bin.onetextcode.exception.ErrorCode;
 import com.bin.onetextcode.exception.ThrowUtils;
-import com.bin.onetextcode.model.dto.*;
+import com.bin.onetextcode.model.dto.user.*;
 import com.bin.onetextcode.model.entity.User;
 import com.bin.onetextcode.model.vo.LoginUserVO;
 import com.bin.onetextcode.model.vo.UserVO;

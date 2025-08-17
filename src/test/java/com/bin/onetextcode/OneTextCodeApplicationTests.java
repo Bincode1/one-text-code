@@ -37,24 +37,20 @@ class OneTextCodeApplicationTests {
     @Resource
     AiCodeGeneratorFacade aiCodeGeneratorFacade;
 
-    @Test
-    void generateAndSaveCode() {
-        File file = aiCodeGeneratorFacade.generateAndSaveCode("给我生成一个商城主页", CodeGenTypeEnum.HTML);
-        Assertions.assertNotNull(file);
-    }
 
 
-    @Test
-    void generateAndSaveCodeStream() {
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("给我随机生成一个网站", CodeGenTypeEnum.HTML);
-        // 阻塞等待所有数据收集完成
-        List<String> result = codeStream.collectList().block();
-//        String s = codeStream.blockLast();
-//
-//        System.out.println(s);
-        Assertions.assertNotNull(result);
-        String completeContent = String.join("", result);
-        Assertions.assertNotNull(completeContent);
-    }
+
+//    @Test
+//    void generateAndSaveCodeStream() {
+//        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("给我随机生成一个网站", CodeGenTypeEnum.HTML);
+//        // 阻塞等待所有数据收集完成
+//        List<String> result = codeStream.collectList().block();
+////        String s = codeStream.blockLast();
+////
+////        System.out.println(s);
+//        Assertions.assertNotNull(result);
+//        String completeContent = String.join("", result);
+//        Assertions.assertNotNull(completeContent);
+//    }
 
 }

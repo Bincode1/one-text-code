@@ -6,7 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import com.bin.onetextcode.exception.BusinessException;
 import com.bin.onetextcode.exception.ErrorCode;
 import com.bin.onetextcode.mapper.UserMapper;
-import com.bin.onetextcode.model.dto.UserQueryRequest;
+import com.bin.onetextcode.model.dto.user.UserQueryRequest;
 import com.bin.onetextcode.model.entity.User;
 import com.bin.onetextcode.model.enums.UserRoleEnum;
 import com.bin.onetextcode.model.vo.LoginUserVO;
@@ -137,6 +137,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 移除登录态
         request.getSession().removeAttribute(USER_LOGIN_STATE);
         return true;
+    }
+
+    @Override
+    public boolean isAdmin(User loginUser) {
+        return UserRoleEnum.ADMIN.getValue().equals(loginUser.getUserRole());
     }
 
     @Override

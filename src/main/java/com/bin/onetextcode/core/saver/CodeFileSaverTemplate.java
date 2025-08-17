@@ -1,8 +1,8 @@
 package com.bin.onetextcode.core.saver;
 
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import com.bin.onetextcode.constant.AppConstant;
 import com.bin.onetextcode.exception.ErrorCode;
 import com.bin.onetextcode.exception.ThrowUtils;
 import com.bin.onetextcode.model.enums.CodeGenTypeEnum;
@@ -13,13 +13,14 @@ import java.nio.charset.StandardCharsets;
 public abstract class CodeFileSaverTemplate<T> {
 
     // 文件保存根目录
-    protected static final String FILE_SAVE_ROOT_DIR = System.getProperty("user.dir") + "/tmp/code_output";
+    protected static final String FILE_SAVE_ROOT_DIR = AppConstant.CODE_OUTPUT_ROOT_DIR;
 
-    public final File saveCode(T result) {
+
+    public final File saveCode(T result, Long appId) {
         // 验证输入
         validInput(result);
         // 构建唯一保存路径
-        String baseDirPath = buildUniqueDir();
+        String baseDirPath = buildUniqueDir(appId);
         // 保存文件
         saveFiles(result, baseDirPath);
         //返回文件
@@ -36,9 +37,9 @@ public abstract class CodeFileSaverTemplate<T> {
         ThrowUtils.throwIf(result == null, ErrorCode.PARAMS_ERROR);
     }
 
-    protected String buildUniqueDir() {
+    protected String buildUniqueDir(Long appId) {
         String codeType = getCodeType().getValue();
-        String uniqueDirName = StrUtil.format("{}_{}", codeType, IdUtil.getSnowflakeNextIdStr());
+        String uniqueDirName = StrUtil.format("{}_{}", codeType, appId);
         String dirPath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirName;
         FileUtil.mkdir(dirPath);
         return dirPath;

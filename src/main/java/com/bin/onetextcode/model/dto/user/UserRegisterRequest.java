@@ -1,4 +1,4 @@
-package com.bin.onetextcode.model.dto;
+package com.bin.onetextcode.model.dto.user;
 
 import lombok.Data;
 

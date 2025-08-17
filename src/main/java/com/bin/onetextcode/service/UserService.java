@@ -1,6 +1,6 @@
 package com.bin.onetextcode.service;
 
-import com.bin.onetextcode.model.dto.UserQueryRequest;
+import com.bin.onetextcode.model.dto.user.UserQueryRequest;
 import com.bin.onetextcode.model.entity.User;
 import com.bin.onetextcode.model.vo.LoginUserVO;
 import com.bin.onetextcode.model.vo.UserVO;
@@ -79,4 +79,5 @@ public interface UserService extends IService<User> {
     boolean userLogout(HttpServletRequest request);
 
 
+    boolean isAdmin(User loginUser);
 }

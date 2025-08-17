@@ -21,5 +21,5 @@ public interface AiCodeGeneratorService {
 
 
     @SystemMessage(fromResource = "prompt/multiFile.txt")
-    Flux<String> createMultiFileStreamChat(String userMessage, CodeGenTypeEnum multiFile);
+    Flux<String> createMultiFileStreamChat(String userMessage);
 }
