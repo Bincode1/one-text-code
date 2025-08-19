@@ -239,14 +239,14 @@ const fetchUserList = async () => {
 
 // 表格变化处理（分页、排序等）
 const handleTableChange = (pag: any) => {
-  pagination.current = pag.current
+  pagination.pageNum = pag.current
   pagination.pageSize = pag.pageSize
   fetchUserList()
 }
 
 // 搜索处理
 const handleSearch = () => {
-  pagination.current = 1
+  pagination.pageNum = 1
   fetchUserList()
 }
 
@@ -337,8 +337,8 @@ const handleDeleteUser = async (userId: number) => {
     if (res.data.code === 0) {
       message.success('删除用户成功')
       // 如果当前页只有一条数据，且不是第一页，则返回上一页
-      if (userList.value.length === 1 && pagination.current > 1) {
-        pagination.current--
+      if (userList.value.length === 1 && pagination.pageNum > 1) {
+        pagination.pageNum--
       }
       fetchUserList()
     } else {

@@ -4,14 +4,84 @@
     <div class="chat-header">
       <div class="header-left">
         <a-button type="link" @click="goBack" class="back-btn">
-          <arrow-left-outlined />
+          <ArrowLeftOutlined />
           返回
         </a-button>
         <h2 class="app-title">{{ appInfo?.appName || '应用生成器' }}</h2>
       </div>
       <div class="header-right">
-        <a-button type="primary" @click="deployAppHandler" :loading="isDeploying">
-          <rocket-outlined />
+        <!-- 应用详情按钮 -->
+        <a-popover
+          trigger="click"
+          placement="bottomRight"
+          :open="showAppInfoPopover"
+          @openChange="handleAppInfoPopoverOpenChange"
+        >
+          <template #content>
+            <div class="app-info-popover">
+              <div class="app-info-item">
+                <span class="info-label">应用ID:</span>
+                <span class="info-value">{{ appInfo?.id || '未知' }}</span>
+              </div>
+              <div class="app-info-item">
+                <span class="info-label">创建时间:</span>
+                <span class="info-value">{{
+                  appInfo?.createTime ? formatDate(appInfo.createTime) : '未知'
+                }}</span>
+              </div>
+              <div class="app-info-item">
+                <span class="info-label">最后更新:</span>
+                <span class="info-value">{{
+                  appInfo?.updateTime ? formatDate(appInfo.updateTime) : '未知'
+                }}</span>
+              </div>
+              <div class="app-info-item">
+                <span class="info-label">部署key:</span>
+                <span class="info-value">{{ appInfo?.deployKey || '未部署' }}</span>
+              </div>
+              <div class="popover-actions">
+                <a-button type="primary" danger size="small" @click="handleDeleteApp">
+                  删除应用
+                </a-button>
+              </div>
+            </div>
+          </template>
+          <a-button type="link" class="info-btn">
+            <InfoCircleOutlined />
+            应用详情
+          </a-button>
+        </a-popover>
+
+        <!-- 部署应用按钮 -->
+        <a-popover
+          trigger="click"
+          placement="bottomRight"
+          :open="showDeployPopover"
+          @openChange="handleDeployPopoverOpenChange"
+          v-if="deployUrl"
+        >
+          <template #content>
+            <div class="deploy-popover">
+              <p class="deploy-info">应用部署成功！</p>
+              <p class="deploy-url">
+                <a :href="deployUrl" target="_blank">{{ deployUrl }}</a>
+              </p>
+              <div class="deploy-actions">
+                <a-button type="link" size="small" @click="openDeployedUrl">
+                  <!--                  -->
+                  在新窗口打开
+                </a-button>
+              </div>
+            </div>
+          </template>
+          <a-button type="primary" @click="deploy" :loading="isDeploying">
+            <RocketOutlined />
+            部署应用
+          </a-button>
+        </a-popover>
+        <!-- 部署按钮（未部署状态） -->
+        <a-button v-else type="primary" @click="deploy" :loading="isDeploying">
+          <RocketOutlined />
           部署应用
         </a-button>
       </div>
@@ -23,96 +93,77 @@
       <div class="chat-panel">
         <div class="messages-container" ref="messagesContainer">
           <!-- 消息列表 -->
-          <div v-for="message in messages" :key="message.id" class="message-item">
+          <!-- 加载更多按钮 -->
+          <div v-if="hasMoreHistory" class="load-more-container">
+            <a-button type="link" @click="loadMoreHistory" :loading="loadingHistory">
+              加载更多历史消息
+            </a-button>
+          </div>
+          <div v-for="(message, index) in messages" :key="index" class="message-item">
             <!-- 用户消息 -->
             <div v-if="message.type === 'user'" class="message user-message">
               <div class="message-content">
-                <div class="message-header">
-                  <user-outlined class="message-icon" />
-                  <span class="message-name">用户消息</span>
-                </div>
                 <div class="message-text">{{ message.content }}</div>
               </div>
             </div>
-
             <!-- AI消息 -->
             <div v-else class="message ai-message">
               <div class="message-content">
                 <div class="message-header">
-                  <robot-outlined class="message-icon" />
-                  <span class="message-name">AI 回复</span>
-                  <span v-if="message.version" class="message-version"
-                    >v{{ message.version }}已保存 {{ formatTime(message.timestamp) }}</span
-                  >
+                  <img src="/public/photo.svg" alt="AI Logo" class="message-icon" />
                 </div>
                 <div class="message-text">
-                  <div v-if="message.files && message.files.length > 0" class="file-list">
-                    <div v-for="file in message.files" :key="file" class="file-item">
-                      {{ file }}
-                    </div>
-                  </div>
-                  <div class="ai-response">{{ message.content }}</div>
+                  <div
+                    class="ai-response"
+                    v-if="message.content"
+                    v-html="renderMarkdown(message.content)"
+                  ></div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 加载状态 -->
-          <div v-if="isGenerating" class="message ai-message">
-            <div class="message-content">
-              <div class="message-header">
-                <robot-outlined class="message-icon" />
-                <span class="message-name">AI 正在生成...</span>
-              </div>
-              <div class="message-text">
-                <a-spin size="small" />
-                <span style="margin-left: 8px">正在生成您的应用，请稍候...</span>
+                <div v-if="message.loading" class="message-header">
+                  <RobotOutlined class="message-icon" />
+                  <span class="message-name">AI 正在生成...</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 用户输入区域 -->
+        <!-- 输入区域 -->
         <div class="input-area">
           <div class="input-container">
             <a-textarea
-              v-model:value="inputMessage"
-              placeholder="描述越详细,页面越具体,可以一步一步完善生成效果"
+              v-if="!isOwner"
+              v-model:value="userInput"
+              placeholder="请描述你想生成的网站，越详细效果越好哦"
               :rows="4"
               class="message-input"
+              :max-length="1000"
               @keydown.enter.prevent="sendMessage"
+              :disabled="isGenerating || !isOwner"
+            />
+            <a-textarea
+              v-else
+              v-model:value="userInput"
+              placeholder="请描述你想生成的网站，越详细效果越好哦"
+              :rows="4"
+              class="message-input"
+              :max-length="1000"
+              @keydown.enter.prevent="sendMessage"
+              :disabled="isGenerating"
             />
             <div class="input-actions">
-              <div class="left-actions">
-                <a-button type="text" class="action-btn">
-                  <template #icon>
-                    <at-sign-outlined />
-                  </template>
-                  @上传
-                </a-button>
-                <a-button type="text" class="action-btn">
-                  <template #icon>
-                    <edit-outlined />
-                  </template>
-                  编辑
-                </a-button>
-                <a-button type="text" class="action-btn">
-                  <template #icon>
-                    <star-outlined />
-                  </template>
-                  优化
-                </a-button>
-              </div>
+              <div class="left-actions"></div>
               <a-button
                 type="primary"
                 shape="circle"
                 size="large"
                 class="send-btn"
                 @click="sendMessage"
-                :loading="isSending"
+                :loading="isGenerating"
+                :disabled="!isOwner"
               >
                 <template #icon>
-                  <send-outlined />
+                  <SendOutlined />
                 </template>
               </a-button>
             </div>
@@ -125,14 +176,14 @@
         <div class="preview-header">
           <h3 class="preview-title">生成后的网页展示</h3>
           <a-button v-if="previewUrl" type="link" @click="openPreview">
-            <external-link-outlined />
+            <!--            <ExternalLinkOutlined />-->
             在新窗口打开
           </a-button>
         </div>
         <div class="preview-container">
-          <div v-if="!previewUrl" class="preview-placeholder">
+          <div v-if="!previewUrl && !isGenerating" class="preview-placeholder">
             <div class="placeholder-content">
-              <file-image-outlined class="placeholder-icon" />
+              <FileImageOutlined class="placeholder-icon" />
               <p>等待生成完成后将在此处显示网页预览</p>
             </div>
           </div>
@@ -152,313 +203,388 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
+import MarkdownIt from 'markdown-it'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
 import {
   ArrowLeftOutlined,
-  EditOutlined,
   FileImageOutlined,
+  InfoCircleOutlined,
   RobotOutlined,
   RocketOutlined,
   SendOutlined,
-  StarOutlined,
-  UserOutlined,
 } from '@ant-design/icons-vue'
-import { deployApp, getAppVoById } from '@/api/appController'
-
-// @符号图标
-const AtSignOutlined = {
-  template:
-    '<svg viewBox="64 64 896 896" focusable="false" data-icon="at" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z"></path></svg>',
-}
-
-// 外部链接图标
-const ExternalLinkOutlined = {
-  template:
-    '<svg viewBox="64 64 896 896" focusable="false" data-icon="link" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M574 665.4a8.03 8.03 0 00-8 0L369.9 727.6A8.03 8.03 0 00360 736V864c0 4.4 3.6 8 8 8h272c4.4 0 8-3.6 8-8V736c0-4.4-3.6-8-8-8H574zM512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z"></path></svg>',
-}
+import { deleteApp, deployApp, getAppVoById } from '@/api/appController'
+import { useLoginUserStore } from '@/stores/loginUser.ts'
+import { listAppChatHistory } from '@/api/chatHistoryController.ts'
 
 const route = useRoute()
 const router = useRouter()
+const loginUserStore = useLoginUserStore()
 
 // 应用信息
 const appInfo = ref<any>(null)
-console.log(route.params)
-const appId = computed(() => route.params.id as string)
+const appId = ref<any>()
+
+// markdown 代码高亮
+const md = new MarkdownIt({
+  highlight: function (str, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`
+    }
+    return `<pre class="hljs"><code>${md.utils.escapeHtml(str)}</code></pre>`
+  },
+})
+const renderMarkdown = (content) => {
+  return md.render(content)
+}
+
+interface Message {
+  type: 'user' | 'ai'
+  content: string
+  loading?: boolean
+  createTime: string
+}
 
 // 消息相关
-const messages = ref<
-  Array<{
-    id: number
-    type: 'user' | 'ai'
-    content: string
-    timestamp: Date
-    version?: string
-    files?: string[]
-  }>
->([])
-const inputMessage = ref('')
-const isSending = ref(false)
+const messages = ref<Message[]>([])
+const userInput = ref('')
 const isGenerating = ref(false)
 const messagesContainer = ref<HTMLElement>()
 
+// 对话历史相关
+const loadingHistory = ref(false)
+const hasMoreHistory = ref(false)
+const lastCreateTime = ref<string>()
+const historyLoaded = ref(false)
+
 // 预览相关
 const previewUrl = ref('')
+const previewReady = ref(false)
+
+// 部署相关
 const isDeploying = ref(false)
+const deployUrl = ref<string>('') // 部署结果地址
+
+// 气泡状态控制
+const showAppInfoPopover = ref(false)
+const showDeployPopover = ref(false)
+const isOwner = computed(() => {
+  return appInfo.value?.userId === loginUserStore.loginUser.id
+})
+const isAdmin = computed(() => {
+  return loginUserStore.loginUser.userRole === 'admin'
+})
+
+// 加载对话历史
+const loadChatHistory = async (isLoadMore = false) => {
+  if (!appId.value || loadingHistory.value) return
+  loadingHistory.value = true
+  try {
+    const params: API.listAppChatHistoryParams = {
+      appId: appId.value,
+      pageSize: 10,
+    }
+    // 如果是加载更多，传递最后一条消息的创建时间作为游标
+    if (isLoadMore && lastCreateTime.value) {
+      params.lastCreateTime = lastCreateTime.value
+    }
+    const res = await listAppChatHistory(params)
+    if (res.data.code === 0 && res.data.data) {
+      const chatHistories = res.data.data.records || []
+      if (chatHistories.length > 0) {
+        // 将对话历史消息转换为消息格式，并按照时间正序排序（老的消息排在前面）
+        const historyMessages: Message[] = chatHistories
+          .map((chat) => ({
+            type: (chat.messageType === 'user' ? 'user' : 'ai') as 'user' | 'ai',
+            content: chat.message,
+            createTime: chat.createTime,
+          }))
+          .reverse()
+        if (isLoadMore) {
+          // 加载更多时，将历史消息添加到开头
+          messages.value.unshift(...historyMessages)
+        } else {
+          // 初始加载，直接设置消息列表
+          messages.value = historyMessages
+        }
+        // 更新游标
+        lastCreateTime.value = chatHistories[chatHistories.length - 1].createTime
+        // 检查是否还有更多历史
+        hasMoreHistory.value = chatHistories.length === 10
+      } else {
+        hasMoreHistory.value = false
+      }
+      historyLoaded.value = true
+    }
+  } catch (error) {
+    console.error('加载对话历史失败:', error)
+    message.error('加载对话历史失败')
+  } finally {
+    loadingHistory.value = false
+  }
+}
+//加载更多历史消息
+const loadMoreHistory = async () => {
+  await loadChatHistory(true)
+}
 
 // 获取应用信息
 const fetchAppInfo = async () => {
-  if (!appId.value) return
+  const id = route.params.id as string
+  if (!id) {
+    message.error('应用id不存在')
+    router.push('/')
+    return
+  }
+  appId.value = id
 
   try {
-    const response = await getAppVoById({ id: BigInt(appId.value) })
-    if (response.data.code === 0 && response.data.data) {
-      appInfo.value = response.data.data
-
-      // 先恢复之前的对话历史和预览URL
-      restoreMessagesFromStorage()
-      restorePreviewUrlFromStorage()
-
-      // 检查是否已经发送过初始消息
-      const { initSentKey } = getStorageKeys()
-      const hasInitSent = sessionStorage.getItem(initSentKey)
-
-      // 如果有初始提示词且还没有发送过，才自动发送
-      if (response.data.data.initPrompt && !hasInitSent) {
-        await sendInitialMessage(response.data.data.initPrompt)
-        // 标记已发送
-        sessionStorage.setItem(initSentKey, 'true')
+    const res = await getAppVoById({ id: appId.value })
+    if (res.data.code === 0 && res.data.data) {
+      appInfo.value = res.data.data
+      console.log('获取应用信息成功:', res.data.data)
+      // 先加载历史对话
+      await loadChatHistory()
+      // 如果至少两条对话记录，展示对应的网站
+      if (messages.value.length >= 2) {
+        updatePreview()
       }
+      // 检查是否需要自动发送初始提示词
+      // 只有在是自己的应用且没有对话历史时才自动发送
+      if (
+        appInfo.value.initPrompt &&
+        isOwner.value &&
+        messages.value.length === 0 &&
+        historyLoaded.value
+      ) {
+        const prompt = res.data.data.initPrompt
+        const userMessage = {
+          id: Date.now(),
+          type: 'user' as const,
+          content: prompt,
+          timestamp: new Date(),
+        }
+        await sendInitialMessage(appInfo.value.initPrompt)
+        // messages.value.push(userMessage)
+        // await sendToAI(prompt)
+      }
+    } else {
+      message.error(res.data.message || '获取应用信息失败')
+      router.push('/')
     }
   } catch (error) {
     console.error('获取应用信息失败:', error)
     message.error('获取应用信息失败')
+    router.push('/')
   }
 }
-
 // 发送初始消息
 const sendInitialMessage = async (prompt: string) => {
-  const userMessage = {
-    id: Date.now(),
-    type: 'user' as const,
+  // 添加用户信息
+  messages.value.push({
+    type: 'user',
     content: prompt,
-    timestamp: new Date(),
-  }
-  messages.value.push(userMessage)
+  })
+  //添加ai消息占位符
+  const aiMessageIndex = messages.value.length
+  messages.value.push({
+    type: 'ai',
+    content: '',
+    loading: true,
+  })
 
-  // 保存到 sessionStorage
-  saveMessagesToStorage()
-
-  // 自动发送给AI
-  await sendToAI(prompt)
+  await nextTick()
+  scrollToBottom()
+  // 开始生成
+  isGenerating.value = true
+  await generateCode(prompt, aiMessageIndex)
 }
-
-// ---------------------------------
-// 获取会话存储的键名
-const getStorageKeys = () => {
-  const messagesKey = `messages_${appId.value}`
-  const previewUrlKey = `preview_url_${appId.value}`
-  const initSentKey = `init_sent_${appId.value}`
-  return { messagesKey, previewUrlKey, initSentKey }
-}
-
-// 保存对话历史到 sessionStorage
-const saveMessagesToStorage = () => {
-  if (!appId.value) return
-  const { messagesKey } = getStorageKeys()
-  sessionStorage.setItem(messagesKey, JSON.stringify(messages.value))
-}
-
-// 保存预览URL到 sessionStorage
-const savePreviewUrlToStorage = () => {
-  if (!appId.value) return
-  const { previewUrlKey } = getStorageKeys()
-  sessionStorage.setItem(previewUrlKey, previewUrl.value)
-}
-// 从 sessionStorage 恢复对话历史
-const restoreMessagesFromStorage = () => {
-  if (!appId.value) return
-  const { messagesKey } = getStorageKeys()
-  const savedMessages = sessionStorage.getItem(messagesKey)
-  if (savedMessages) {
-    try {
-      const parsedMessages = JSON.parse(savedMessages)
-      // 恢复时需要将时间戳字符串转换回 Date 对象
-      messages.value = parsedMessages.map((msg) => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp),
-      }))
-    } catch (error) {
-      console.error('恢复消息历史失败:', error)
-    }
-  }
-}
-// 从 sessionStorage 恢复预览URL
-const restorePreviewUrlFromStorage = () => {
-  if (!appId.value) return
-  const { previewUrlKey } = getStorageKeys()
-  const savedPreviewUrl = sessionStorage.getItem(previewUrlKey)
-  if (savedPreviewUrl) {
-    previewUrl.value = savedPreviewUrl
-  }
-}
-//-----------------
-// 发送消息
 const sendMessage = async () => {
-  if (!inputMessage.value.trim() || isSending.value) return
+  if (!userInput.value.trim() || isGenerating.value) return
+  const message = userInput.value.trim()
 
-  const userMessage = {
-    id: Date.now(),
-    type: 'user' as const,
-    content: inputMessage.value,
-    timestamp: new Date(),
-  }
+  userInput.value = ''
+  // 添加用户信息
+  messages.value.push({
+    type: 'user',
+    content: message,
+  })
+  //添加ai消息占位符
+  const aiMessageIndex = messages.value.length
+  messages.value.push({
+    type: 'ai',
+    content: '',
+    loading: true,
+  })
 
-  messages.value.push(userMessage)
-  saveMessagesToStorage() // 保存到 sessionStorage
-
-  const currentMessage = inputMessage.value
-  inputMessage.value = ''
-  isSending.value = true
-
-  // 滚动到底部
   await nextTick()
   scrollToBottom()
 
-  try {
-    await sendToAI(currentMessage)
-  } catch (error) {
-    console.error('发送消息失败:', error)
-    message.error('发送消息失败，请重试')
-  } finally {
-    isSending.value = false
-  }
-}
-// 发送给Ai
-const sendToAI = async (prompt: string) => {
-  if (!appId.value) return
-
+  // 开始生成
   isGenerating.value = true
-
+  await generateCode(message, aiMessageIndex)
+}
+// 发送给AI
+const generateCode = async (userMessage: string, aiMessageIndex: number) => {
+  let streamCompleted = false
   try {
     const eventSource = new EventSource(
-      `/api/app/chat/gen/code?appId=${encodeURIComponent(appId.value)}&message=${encodeURIComponent(prompt)}`,
+      `/api/app/chat/gen/code?appId=${appId.value}&message=${userMessage}`,
     )
-    let aiResponse = ''
-    let files: string[] = []
-    let version = '1'
-    let aiMessageId: number | null = null
-    let isStreamComplete = false
-
+    // 构建 URL参数
+    const params = new URLSearchParams({
+      appId: appId.value || '',
+      message: userMessage,
+    })
+    let fullContent = ''
     eventSource.onopen = () => {
       console.log('SSE 连接已建立')
     }
-
-    eventSource.onmessage = (event) => {
-      console.log('收到消息:', event.data)
-
+    // 处理接收到的消息
+    eventSource.onmessage = function (event) {
+      if (streamCompleted) return
       try {
-        const data = JSON.parse(event.data)
-        if (data.d) {
-          aiResponse += data.d
-          if (data.files) {
-            files = data.files
-          }
-
-          if (aiMessageId === null) {
-            aiMessageId = Date.now() + 1
-            messages.value.push({
-              id: aiMessageId,
-              type: 'ai' as const,
-              content: aiResponse,
-              timestamp: new Date(),
-              version,
-              files,
-            })
-          } else {
-            messages.value = messages.value.map((msg) =>
-              msg.id === aiMessageId ? { ...msg, content: aiResponse, files } : msg,
-            )
-          }
-
-          // 实时保存到 sessionStorage
-          saveMessagesToStorage()
+        const parsed = JSON.parse(event.data)
+        const content = parsed.d
+        if (content !== undefined && content !== null) {
+          fullContent += content
+          messages.value[aiMessageIndex].content = fullContent
+          messages.value[aiMessageIndex].loading = false
           scrollToBottom()
         }
       } catch (error) {
         console.error('解析 SSE 数据失败:', error)
+        handleError(error, aiMessageIndex)
       }
     }
-
-    eventSource.addEventListener('done', (event) => {
-      console.log('收到 done 事件:', event.data)
-
-      if (aiMessageId !== null) {
-        messages.value = messages.value.map((msg) =>
-          msg.id === aiMessageId ? { ...msg, content: aiResponse, files, version } : msg,
-        )
-        // 最终保存到 sessionStorage
-        saveMessagesToStorage()
-      }
-
+    // 处理done事件
+    eventSource.addEventListener('done', function () {
+      if (streamCompleted) return
+      streamCompleted = true
       isGenerating.value = false
-      isStreamComplete = true
-      generatePreviewUrl()
-
       eventSource.close()
+      // 延迟更新预览，确保后端已经完成处理
+      setTimeout(async () => {
+        await fetchAppInfo()
+        updatePreview()
+      }, 1000)
     })
-
+    // 处理错误
     eventSource.onerror = (error) => {
-      console.log('EventSource readyState:', eventSource.readyState)
-      console.log('Stream complete status:', isStreamComplete)
-
-      if (!isStreamComplete) {
-        console.error('SSE 连接错误:', error)
-        message.error('AI 生成失败，请重试')
+      if (streamCompleted || isGenerating.value) return
+      // 检查是否是正常的连接关闭
+      if (eventSource.readyState === EventSource.CLOSED) {
+        streamCompleted = true
         isGenerating.value = false
+        eventSource?.close()
+        setTimeout(async () => {
+          await fetchAppInfo()
+          updatePreview()
+        }, 1000)
       } else {
-        console.log('流已完成，连接正常关闭')
+        handleError(new Error('SSE 连接错误'), aiMessageIndex)
       }
-
-      if (eventSource.readyState !== EventSource.CLOSED) {
-        eventSource.close()
-      }
+      isGenerating.value = false
     }
   } catch (error) {
-    console.error('AI 生成失败:', error)
-    message.error('AI 生成失败，请重试')
-    isGenerating.value = false
+    console.error('创建EventSource 失败:', error)
+    handleError(error, aiMessageIndex)
   }
 }
+// 错误处理函数
+const handleError = (error: unknown, aiMessageIndex: number) => {
+  console.error('生成代码失败:', error)
+  messages.value[aiMessageIndex].content = '生成代码失败,请重试'
+  messages.value[aiMessageIndex].loading = false
+  message.error('生成代码失败')
+  isGenerating.value = false
+}
 
-// 生成预览URL（修改后的版本）
-const generatePreviewUrl = () => {
-  if (appInfo.value?.codeGenType && appId.value) {
+// 生成预览URL
+const updatePreview = () => {
+  if (appId.value) {
+    const codeGenType = appInfo.value.codeGenType || 'html'
     previewUrl.value = `/api/static/${appInfo.value.codeGenType}_${appId.value}/`
-    // 保存到 sessionStorage
-    savePreviewUrlToStorage()
+    previewReady.value = true
   }
 }
-
+// 滚动到底部
+const scrollToBottom = () => {
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
 // 部署应用
-const deployAppHandler = async () => {
-  if (!appId.value) return
-
+const deploy = async () => {
+  if (!appId.value) {
+    message.error('应用id不存在')
+    return
+  }
   isDeploying.value = true
+
   try {
-    const response = await deployApp({ appId: appId.value })
-    if (response.data.code === 0 && response.data.data) {
+    const res = await deployApp({ appId: appId.value })
+
+    if (res.data.code === 0 && res.data.data) {
+      deployUrl.value = res.data.data // 保存部署地址
+      showDeployPopover.value = true
       message.success('应用部署成功！')
-      // 可以显示部署后的URL
-      console.log('部署URL:', response.data.data)
+      // 部署成功后显示气泡
     } else {
-      message.error(response.data.message || '部署失败')
+      message.error(res.data.message || '部署失败')
     }
   } catch (error) {
-    console.error('部署失败:', error)
     message.error('部署失败，请重试')
   } finally {
     isDeploying.value = false
   }
+}
+
+// 打开部署后的链接
+const openDeployedUrl = () => {
+  if (deployUrl.value) {
+    window.open(deployUrl.value, '_blank')
+  }
+}
+
+// 处理应用详情气泡显示状态变化
+const handleAppInfoPopoverOpenChange = (open: boolean) => {
+  showAppInfoPopover.value = open
+  // 如果打开了应用详情气泡，关闭部署气泡
+  if (open) {
+    showDeployPopover.value = false
+  }
+}
+
+// 处理部署气泡显示状态变化
+const handleDeployPopoverOpenChange = (open: boolean) => {
+  showDeployPopover.value = open
+  // 如果打开了部署气泡，关闭应用详情气泡
+  if (open) {
+    showAppInfoPopover.value = false
+  }
+}
+// 处理删除应用
+const handleDeleteApp = () => {
+  Modal.confirm({
+    title: '确认删除',
+    content: '确定要删除这个应用吗？此操作不可恢复。',
+    okText: '确认',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await deleteApp({ id: appId.value })
+        message.success('应用删除成功')
+        showAppInfoPopover.value = false
+        router.push('/')
+      } catch (error) {
+        console.error('删除应用失败:', error)
+        message.error('删除应用失败，请重试')
+      }
+    },
+  })
 }
 
 // 在新窗口打开预览
@@ -468,19 +594,12 @@ const openPreview = () => {
   }
 }
 
-// 滚动到底部
-const scrollToBottom = () => {
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-  }
-}
-
 // 返回首页
 const goBack = () => {
   router.push('/')
 }
 
-// 格式化时间
+// 格式化时间（相对时间）
 const formatTime = (date: Date) => {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
@@ -494,6 +613,12 @@ const formatTime = (date: Date) => {
   return `${Math.floor(days / 365)}年前`
 }
 
+// 格式化日期（绝对时间）
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleString()
+}
+
 // 组件挂载
 onMounted(() => {
   fetchAppInfo()
@@ -505,7 +630,7 @@ onMounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: #fff;
 }
 
 /* 顶部栏 */
@@ -542,29 +667,111 @@ onMounted(() => {
   gap: 12px;
 }
 
+.info-btn {
+  color: #666;
+}
+
+/* 应用详情气泡样式 */
+.app-info-popover {
+  width: 300px;
+  padding: 8px 0;
+}
+
+.app-info-item {
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+}
+
+.app-info-item:hover {
+  background-color: #f5f5f5;
+}
+
+.info-label {
+  width: 80px;
+  color: #666;
+  font-size: 14px;
+}
+
+.info-value {
+  flex: 1;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px 8px;
+  border-top: 1px solid #e8e8e8;
+  margin-top: 4px;
+}
+
+/* 部署气泡样式 */
+.deploy-popover {
+  width: 320px;
+  padding: 12px;
+}
+
+.deploy-info {
+  margin: 0 0 8px 0;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.deploy-url {
+  margin: 0 0 12px 0;
+  word-break: break-all;
+  font-size: 14px;
+}
+
+.deploy-url a {
+  color: #1890ff;
+  text-decoration: none;
+}
+
+.deploy-url a:hover {
+  text-decoration: underline;
+}
+
+.deploy-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* 主要内容区域 */
 .chat-content {
   flex: 1;
   display: flex;
   overflow: hidden;
+  gap: 0;
 }
 
 /* 左侧对话区域 */
 .chat-panel {
-  flex: 1;
+  width: 40%;
   display: flex;
   flex-direction: column;
   background: white;
   border-right: 1px solid #e8e8e8;
 }
 
+/* 右侧预览区域 */
+.preview-panel {
+  width: 60%;
+  display: flex;
+  flex-direction: column;
+  background: white;
+}
+
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .message-item {
@@ -584,16 +791,16 @@ onMounted(() => {
   align-self: flex-start;
 }
 
-.message-content {
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.ai-message .message-content {
+  background: transparent;
+  box-shadow: unset;
 }
 
-.user-message .message-content {
-  background: #1890ff;
-  color: white;
+.message-content {
+  background: #f0f2f5;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0);
 }
 
 .message-header {
@@ -604,15 +811,11 @@ onMounted(() => {
 }
 
 .message-icon {
-  font-size: 16px;
-}
-
-.user-message .message-icon {
-  color: white;
-}
-
-.ai-message .message-icon {
-  color: #1890ff;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%; /* 用户头像是圆的 */
+  object-fit: cover; /* 避免拉伸 */
+  margin-right: 8px;
 }
 
 .message-name {
@@ -655,7 +858,7 @@ onMounted(() => {
 
 /* 输入区域 */
 .input-area {
-  padding: 24px;
+  padding: 12px 16px;
   border-top: 1px solid #e8e8e8;
   background: white;
 }
@@ -692,18 +895,6 @@ onMounted(() => {
   gap: 16px;
 }
 
-.action-btn {
-  color: #666;
-  border: none;
-  padding: 4px 8px;
-  height: auto;
-}
-
-.action-btn:hover {
-  color: #1890ff;
-  background: rgba(24, 144, 255, 0.1);
-}
-
 .send-btn {
   background: #1890ff;
   border: none;
@@ -720,13 +911,6 @@ onMounted(() => {
 }
 
 /* 右侧预览区域 */
-.preview-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: white;
-}
-
 .preview-header {
   padding: 16px 24px;
   border-bottom: 1px solid #e8e8e8;
@@ -779,13 +963,13 @@ onMounted(() => {
   }
 
   .chat-panel {
-    flex: 1;
+    width: 100%;
     border-right: none;
     border-bottom: 1px solid #e8e8e8;
   }
 
   .preview-panel {
-    flex: 1;
+    width: 100%;
     min-height: 300px;
   }
 
@@ -799,6 +983,11 @@ onMounted(() => {
 
   .message {
     max-width: 90%;
+  }
+
+  .app-info-popover,
+  .deploy-popover {
+    width: 260px;
   }
 }
 </style>

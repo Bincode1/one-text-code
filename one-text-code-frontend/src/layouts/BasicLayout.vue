@@ -5,7 +5,7 @@
 
     <!-- 内容区域 -->
     <a-layout-content class="main-content">
-      <div class="content-wrapper">
+      <div class="content-wrapper" :class="{ wide: isWidePage }">
         <router-view />
       </div>
     </a-layout-content>
@@ -18,6 +18,14 @@
 <script setup lang="ts">
 import GlobalHeader from '@/components/GlobalHeader.vue'
 import GlobalFooter from '@/components/GlobalFooter.vue'
+import {computed} from 'vue'
+import {useRoute} from 'vue-router'
+
+const route = useRoute()
+const isWidePage = computed(() => {
+  const path = route.path
+  return path === '/' || path.startsWith('/chat/')
+})
 </script>
 
 <style scoped>
@@ -37,6 +45,11 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
   margin: 0 auto;
   padding: 24px;
   min-height: 100%;
+}
+
+.content-wrapper.wide {
+  max-width: 100%;
+  padding: 0;
 }
 
 /* 响应式设计 */

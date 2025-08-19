@@ -17,8 +17,6 @@
           @click="handleMenuClick"
         />
       </div>
-      <!-- 新增的中间区域 -->
-
       <!-- 右侧：用户信息 -->
       <div class="header-right">
         <template v-if="isUserReady">
@@ -146,7 +144,10 @@ onMounted(async () => {
 
 <style scoped>
 .global-header {
-  background: #fff;
+  /* 毛玻璃效果 */
+  background: rgba(255, 255, 255, 0.1); /* 半透明白色背景 */
+  backdrop-filter: blur(10px); /* 模糊效果 */
+  -webkit-backdrop-filter: blur(10px); /* 兼容 Safari */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: fixed;
   top: 0;
