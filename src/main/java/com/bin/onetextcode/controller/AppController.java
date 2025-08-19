@@ -60,7 +60,7 @@ public class AppController {
     }
 
     @PostMapping("/my/list/page/vo")
-    public BaseResponse<List<AppVO>> listMyAppsByPage(@RequestBody AppQueryRequest appQueryRequest, HttpServletRequest request) {
+    public BaseResponse<Page<AppVO>> listMyAppsByPage(@RequestBody AppQueryRequest appQueryRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
 
         return ResultUtils.success(appService.listMyAppVOByPage(appQueryRequest, request));
@@ -201,7 +201,6 @@ public class AppController {
         String deployUrl = appService.deployApp(appId, loginUser);
         return ResultUtils.success(deployUrl);
     }
-
 
 
 }

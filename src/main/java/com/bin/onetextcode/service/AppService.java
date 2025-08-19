@@ -7,6 +7,7 @@ import com.bin.onetextcode.model.dto.app.AppUpdateRequest;
 import com.bin.onetextcode.model.entity.App;
 import com.bin.onetextcode.model.entity.User;
 import com.bin.onetextcode.model.vo.AppVO;
+import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,7 +32,7 @@ public interface AppService extends IService<App> {
 
     AppVO getAppVOById(long id, HttpServletRequest request);
 
-    List<AppVO> listMyAppVOByPage(AppQueryRequest queryRequest, HttpServletRequest request);
+    Page<AppVO> listMyAppVOByPage(AppQueryRequest queryRequest, HttpServletRequest request);
 
 
     AppVO getAppVO(App app);

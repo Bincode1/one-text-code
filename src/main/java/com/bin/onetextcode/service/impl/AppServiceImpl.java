@@ -18,22 +18,26 @@ import com.bin.onetextcode.model.dto.app.AppQueryRequest;
 import com.bin.onetextcode.model.dto.app.AppUpdateRequest;
 import com.bin.onetextcode.model.entity.App;
 import com.bin.onetextcode.model.entity.User;
+import com.bin.onetextcode.model.enums.ChatHistoryMessageTypeEnum;
 import com.bin.onetextcode.model.enums.CodeGenTypeEnum;
 import com.bin.onetextcode.model.vo.AppVO;
 import com.bin.onetextcode.model.vo.UserVO;
 import com.bin.onetextcode.service.AppService;
+import com.bin.onetextcode.service.ChatHistoryService;
 import com.bin.onetextcode.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.File;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,12 +46,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
     @Resource
     private UserService userService;
 
     @Resource
     AiCodeGeneratorFacade aiCodeGeneratorFacade;
+
+    @Resource
+    ChatHistoryService chatHistoryService;
 
     @Override
     public Long addApp(AppAddRequest appAddRequest, HttpServletRequest request) {
@@ -103,7 +111,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
-    public List<AppVO> listMyAppVOByPage(AppQueryRequest appQueryRequest, HttpServletRequest request) {
+    public Page<AppVO> listMyAppVOByPage(AppQueryRequest appQueryRequest, HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
         // 限制每页最多20个
         int pageSize = appQueryRequest.getPageSize();
@@ -117,7 +125,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, page.getTotalRow());
         List<AppVO> appVOList = getAppVOList(page.getRecords());
         appVOPage.setRecords(appVOList);
-        return appVOList;
+        return appVOPage;
     }
 
 
@@ -178,30 +186,33 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(StrUtil.isBlank(userMessage), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "app不存在");
-
         // 仅本人可以创建应用
         ThrowUtils.throwIf(!loginUser.getId().equals(app.getUserId()), ErrorCode.NO_AUTH_ERROR, "无权限");
         CodeGenTypeEnum codeGenType = CodeGenTypeEnum.getEnumByValue(app.getCodeGenType());
         ThrowUtils.throwIf(codeGenType == null, ErrorCode.PARAMS_ERROR, "不支持的代码生成类型");
+        // 添加用户消息
+        Long parentId = chatHistoryService.addChatMessage(appId, userMessage, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId(), null);
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, codeGenType, appId);
-        // 原始 map 操作：封装每个代码片段为 JSON 并转为 SSE 事件
-        return contentFlux
-                .map(chunk -> {
-                    // 将内容包装成JSON对象
-                    Map<String, String> wrapper = Map.of("d", chunk);
-                    String jsonData = JSONUtil.toJsonStr(wrapper);
-                    return ServerSentEvent.<String>builder()
-                            .data(jsonData)
-                            .build();
-                })
-                .concatWith(Mono.just(
-                        // 发送结束事件
-                        ServerSentEvent.<String>builder()
-                                .event("done")
-                                .data("[DONE]")
-                                .build()
-                ));
+        // 初始化ai消息
 
+        // 原始 map 操作：封装每个代码片段为 JSON 并转为 SSE 事件
+        StringBuilder codeBuilder = new StringBuilder();
+        return contentFlux.map(chunk -> {
+            codeBuilder.append(chunk);
+            // 将内容包装成JSON对象
+            Map<String, String> wrapper = Map.of("d", chunk);
+            String jsonData = JSONUtil.toJsonStr(wrapper);
+            return ServerSentEvent.<String>builder().data(jsonData).build();
+        }).doOnComplete(() -> {
+            String completeAiResponse = codeBuilder.toString();
+            chatHistoryService.addChatMessage(appId, completeAiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId(), parentId);
+        }).doOnError(error -> {
+            log.error("生成代码失败: {}", error.getMessage());
+            String errorMessage = error.getMessage();
+            chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId(), parentId);
+        }).concatWith(Mono.just(
+                // 发送结束事件
+                ServerSentEvent.<String>builder().event("done").data("[DONE]").build()));
     }
 
     @Override
@@ -249,5 +260,31 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
+    /**
+     * 删除应用时关联删除对话历史
+     *
+     * @param id 应用ID
+     * @return 是否成功
+     */
+    @Override
+    public boolean removeById(Serializable id) {
+        if (id == null) {
+            return false;
+        }
+        // 转换为 Long 类型
+        Long appId = Long.valueOf(id.toString());
+        if (appId <= 0) {
+            return false;
+        }
+        // 先删除关联的对话历史
+        try {
+            chatHistoryService.deleteByAppId(appId);
+        } catch (Exception e) {
+            // 记录日志但不阻止应用删除
+            log.error("删除应用关联对话历史失败: {}", e.getMessage());
+        }
+        // 删除应用
+        return super.removeById(id);
+    }
 
 }
